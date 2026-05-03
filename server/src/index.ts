@@ -48,7 +48,7 @@ app.use(cors({
     // In dev mode: allow everything for easier local development
     if (IS_DEV) return cb(null, true);
     // In production: check allowlist
-    if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+    if (ALLOWED_ORIGINS.includes(origin) || origin === "https://epa-one.vercel.app") return cb(null, true);
     cb(new Error(`CORS: origin ${origin} not allowed`));
   },
   methods: ["GET", "POST", "OPTIONS"],
