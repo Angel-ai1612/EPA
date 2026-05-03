@@ -15,7 +15,7 @@ import type { User } from "firebase/auth";
 import PollingBoothMap from "./services/PollingBoothMap";
 
 // ─── API ──────────────────────────────────────────────────────────────────────
-const API = import.meta.env.VITE_API_URL ?? "http://localhost:3001/api/v1";
+const API = (import.meta.env.VITE_API_URL || "http://localhost:3001").replace(/\/$/, "").replace(/\/api\/v1$/, "") + "/api/v1";
 
 async function apiPost<T>(endpoint: string, body: unknown): Promise<T> {
   const controller = new AbortController();
