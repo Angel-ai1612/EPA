@@ -1,0 +1,12 @@
+{
+  "name": "election-path-assistant",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client-app && npm run dev",
+    "build:client": "cd client-app && npm run build",
+    "build:server": "cd server && npm run build",
+    "install:all": "cd server && npm install && cd ../client-app && npm install"
+  }
+}
