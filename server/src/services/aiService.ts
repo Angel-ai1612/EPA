@@ -1,22 +1,39 @@
-import type { ClassifiedIntent, IntentTag, ChatMessage, TimelineStep, UserState } from "../types";
+import type { ClassifiedIntent, IntentTag, ChatMessage, TimelineStep, UserState } from "../../shared/src/types";
 import { sanitizePII } from "../middleware/piiSanitiser";
 
 const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-haiku-4-5-20251001";
 
-async function callClaude(systemPrompt: string, userMessage: string, maxTokens = 512): Promise<string> {
+async function callClaude(
+  systemPrompt: string,
+  messages: { role: string; content: string }[],
+  maxTokens = 512
+): Promise<string> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new Error("ANTHROPIC_API_KEY is not set");
+  }
+
   const res = await fetch(ANTHROPIC_API, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
     body: JSON.stringify({
       model: MODEL,
       max_tokens: maxTokens,
       system: systemPrompt,
-      messages: [{ role: "user", content: userMessage }],
+      messages: messages,
     }),
   });
 
-  if (!res.ok) throw new Error(`Anthropic API error: ${res.status}`);
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Anthropic API error (${res.status}): ${errorText}`);
+  }
+
   const data = await res.json() as { content: { type: string; text: string }[] };
   const textBlock = data.content.find(b => b.type === "text");
   return textBlock?.text ?? "";
@@ -41,12 +58,16 @@ Respond ONLY with valid JSON in this exact format, no preamble:
 export async function classifyIntent(rawQuery: string): Promise<ClassifiedIntent> {
   const sanitized = sanitizePII(rawQuery);
   try {
-    const response = await callClaude(INTENT_SYSTEM, sanitized);
-    const parsed = JSON.parse(response.replace(/```json|```/g, "").trim()) as {
+    const response = await callClaude(INTENT_SYSTEM, [{ role: "user", content: sanitized }]);
+    // Extract JSON if AI wrapped it in markdown code blocks
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    const jsonStr = jsonMatch ? jsonMatch[0] : response;
+    const parsed = JSON.parse(jsonStr.trim()) as {
       tags: IntentTag[]; isMultiIntent: boolean; language: string; confidence: number;
     };
     return { ...parsed, sanitizedInput: sanitized };
-  } catch {
+  } catch (err) {
+    console.error("[AI] Intent classification failed:", err);
     // Fallback: return generic classification
     return {
       tags: ["GENERAL_QUESTION"],
@@ -61,11 +82,13 @@ export async function classifyIntent(rawQuery: string): Promise<ClassifiedIntent
 // ─── Response Validator ───────────────────────────────────────────────────────
 function validateAIResponse(response: string, allowedStepIds: string[]): boolean {
   // Reject if AI invented step IDs not in rule pack
-  const stepMentions = response.match(/step[_-][a-z_]+/gi) ?? [];
+  const stepMentions = response.match(/step[_-][a-z_0-9]+/gi) ?? [];
   for (const mention of stepMentions) {
     const id = mention.toLowerCase().replace("step-", "step_");
-    if (!allowedStepIds.some(s => response.toLowerCase().includes(s))) {
+    // If the mention looks like a step ID, it MUST be in the allowed list
+    if (!allowedStepIds.some(s => id.includes(s.toLowerCase()) || s.toLowerCase().includes(id))) {
       console.warn(`[VALIDATOR] Potentially unknown step reference: ${id}`);
+      return false; // Fail validation if unknown step is mentioned
     }
   }
   // Reject empty or very short responses
@@ -110,20 +133,7 @@ STRICT RULES:
   conversationHistory.push({ role: "user", content: sanitizedMessage });
 
   try {
-    const res = await fetch(ANTHROPIC_API, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 512,
-        system: systemPrompt,
-        messages: conversationHistory,
-      }),
-    });
-
-    if (!res.ok) throw new Error(`API error ${res.status}`);
-    const data = await res.json() as { content: { type: string; text: string }[] };
-    const reply = data.content.find(b => b.type === "text")?.text ?? "";
+    const reply = await callClaude(systemPrompt, conversationHistory);
 
     if (!validateAIResponse(reply, allowedStepIds)) {
       throw new Error("Response validation failed");

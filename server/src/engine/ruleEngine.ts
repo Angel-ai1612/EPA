@@ -8,7 +8,7 @@ import type {
   RulePack, UserInput, UserState, TimelineStep, SimulateResponse,
   EligibilityCondition, EligibilityRule, ScenarioRule, LocalizedString,
   ResponseMeta,
-} from "../types";
+} from "../../shared/src/types";
 import { createHash } from "crypto";
 
 // ─── Rule Pack Registry ───────────────────────────────────────────────────────
@@ -30,18 +30,25 @@ export function getRulePack(jurisdictionId: string): RulePack | null {
   return rulePacks.get(jurisdictionId) ?? null;
 }
 
+/**
+ * Get all registered jurisdiction IDs.
+ */
+export function getRegisteredJurisdictions(): string[] {
+  return Array.from(rulePacks.keys());
+}
+
 // ─── Eligibility Engine ───────────────────────────────────────────────────────
 
 /**
  * Recursively evaluate a single eligibility condition against user input.
  * Supports: ageGroup, citizenship, not, and, or — composable boolean logic.
  */
-function evaluateCondition(condition: EligibilityCondition, input: UserInput): boolean {
-  if (condition.ageGroup)    return condition.ageGroup.includes(input.ageGroup);
-  if (condition.citizenship) return condition.citizenship.includes(input.citizenship);
-  if (condition.not)         return !evaluateCondition(condition.not, input);
-  if (condition.and)         return condition.and.every(c => evaluateCondition(c, input));
-  if (condition.or)          return condition.or.some(c => evaluateCondition(c, input));
+export function evaluateCondition(condition: EligibilityCondition, input: UserInput): boolean {
+  if (condition.ageGroup && !condition.ageGroup.includes(input.ageGroup)) return false;
+  if (condition.citizenship && !condition.citizenship.includes(input.citizenship)) return false;
+  if (condition.not && evaluateCondition(condition.not, input)) return false;
+  if (condition.and && !condition.and.every(c => evaluateCondition(c, input))) return false;
+  if (condition.or && !condition.or.some(c => evaluateCondition(c, input))) return false;
   return true; // empty condition = always match
 }
 
@@ -71,29 +78,33 @@ export function evaluateEligibility(input: UserInput, pack: RulePack): UserState
  * Resolve relative deadlines (e.g. "-30d") against the election date.
  * Marks each deadline as isPast if the resolved date is in the past.
  */
-function resolveDeadline(step: TimelineStep, electionDate?: string): TimelineStep {
+export function resolveDeadline(step: TimelineStep, electionDate?: string): TimelineStep {
   if (step.deadline.type === "relative_to_election" && electionDate) {
     const election = new Date(electionDate);
-    const match    = step.deadline.value.match(/^(-?\d+)d$/);
-    if (match) {
-      const days    = parseInt(match[1], 10);
-      const resolved = new Date(election);
-      resolved.setDate(resolved.getDate() + days);
-      return {
-        ...step,
-        deadline: {
-          ...step.deadline,
-          value:  resolved.toISOString().split("T")[0],
-          isPast: resolved < new Date(),
-        },
-      };
+    if (!isNaN(election.getTime())) {
+      const match = step.deadline.value.match(/^(-?\d+)d$/);
+      if (match) {
+        const days = parseInt(match[1], 10);
+        const resolved = new Date(election);
+        resolved.setDate(resolved.getDate() + days);
+        return {
+          ...step,
+          deadline: {
+            ...step.deadline,
+            value: resolved.toISOString().split("T")[0],
+            isPast: resolved < new Date(),
+          },
+        };
+      }
     }
   }
+  const d = new Date(step.deadline.value);
+  const isPast = !isNaN(d.getTime()) && d < new Date();
   return {
     ...step,
     deadline: {
       ...step.deadline,
-      isPast: new Date(step.deadline.value) < new Date(),
+      isPast,
     },
   };
 }

@@ -16,11 +16,13 @@ export interface AuditEntry {
 const LOG_DIR = path.join(process.cwd(), "logs");
 if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
 
-const LOG_FILE = path.join(LOG_DIR, `audit-${new Date().toISOString().split("T")[0]}.jsonl`);
+function getLogFile(): string {
+  return path.join(LOG_DIR, `audit-${new Date().toISOString().split("T")[0]}.jsonl`);
+}
 
 export function writeAuditLog(entry: AuditEntry): void {
   const line = JSON.stringify(entry) + "\n";
-  fs.appendFileSync(LOG_FILE, line, "utf-8");
+  fs.appendFileSync(getLogFile(), line, "utf-8");
 }
 
 export function hashPayload(payload: unknown): string {
