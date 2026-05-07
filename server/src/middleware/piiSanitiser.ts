@@ -5,7 +5,7 @@ const PII_PATTERNS: { pattern: RegExp; label: string }[] = [
   { pattern: /\b[6-9]\d{9}\b/g, label: "[PHONE]" },
   { pattern: /[a-zA-Z0-9+_.-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, label: "[EMAIL]" },
   { pattern: /\b[A-Z]{5}\d{4}[A-Z]\b/g, label: "[PAN]" },
-  { pattern: /\b[A-Z]{3}\d{7}\b/g, label: "[PASSPORT]" },
+  { pattern: /\b[A-Z]\d{7}\b/g, label: "[PASSPORT]" },
 ];
 
 export function sanitizePII(text: string): string {

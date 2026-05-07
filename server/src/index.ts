@@ -6,13 +6,13 @@ import { piiMiddleware } from "./middleware/piiSanitiser";
 import { writeAuditLog } from "./middleware/auditLogger";
 import {
   getRulePack, evaluateEligibility, generateTimeline,
-  simulateScenario, buildMeta, registerRulePack,
+  simulateScenario, buildMeta, registerRulePack, getRegisteredJurisdictions,
 } from "./engine/ruleEngine";
 import { classifyIntent, groundedChat } from "./services/aiService";
 import { IN_AP_RULE_PACK } from "./engine/rulePacks/IN-AP";
 import type {
   StateRequest, TimelineRequest, SimulateRequest, ChatRequest,
-} from "./types";
+} from "../../shared/src/types";
 
 // ─── Register rule packs ──────────────────────────────────────────────────────
 registerRulePack(IN_AP_RULE_PACK);
@@ -49,7 +49,7 @@ app.use(cors({
     if (IS_DEV) return cb(null, true);
     // In production: check allowlist
     if (ALLOWED_ORIGINS.includes(origin) || origin === "https://epa-one.vercel.app") return cb(null, true);
-    cb(new Error(`CORS: origin ${origin} not allowed`));
+    cb(null, false);
   },
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
@@ -100,7 +100,7 @@ function validate(req: express.Request, res: express.Response): boolean {
 app.get("/api/health", (_req, res) => {
   res.json({
     status: "ok",
-    packs: Array.from(["IN-AP"]),
+    packs: getRegisteredJurisdictions(),
     timestamp: new Date().toISOString(),
   });
 });
@@ -192,6 +192,7 @@ app.post(
   body("message").isString().isLength({ min: 1, max: 1000 }).trim(),
   body("jurisdictionId").isString().isLength({ min: 2, max: 20 }).trim(),
   body("userState").isObject(),
+  body("timeline").isArray(),
   body("history").isArray({ max: 20 }).optional(),
   async (req: express.Request, res: express.Response) => {
     if (!validate(req, res)) return;

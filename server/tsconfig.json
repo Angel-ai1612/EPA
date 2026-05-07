@@ -4,11 +4,11 @@
     "module": "CommonJS",
     "moduleResolution": "node",
     "outDir": "dist",
-    "rootDir": ".",
+    "rootDir": "..",
     "strict": false,
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*", "shared/**/*"],
+  "include": ["src/**/*", "../shared/src/**/*"],
   "exclude": ["node_modules", "dist"]
 }

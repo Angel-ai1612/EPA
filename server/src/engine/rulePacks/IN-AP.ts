@@ -1,4 +1,4 @@
-import type { RulePack } from "../../types";
+import type { RulePack } from "../../../shared/src/types";
 
 const ECI_SOURCE = {
   label: "Election Commission of India",
